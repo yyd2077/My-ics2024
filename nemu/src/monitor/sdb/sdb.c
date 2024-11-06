@@ -49,10 +49,10 @@ static int cmd_c(char *args) {
 
 
 static int cmd_q(char *args) {
-  cpu_exec(-1);
-  return -1;
+  nemu_state.state = NEMU_QUIT;  // 设置退出状态为 QUIT
+  cpu_exec(1);  // 执行一条指令（或根据需要执行更多）
+  return -1;  // 返回-1以退出命令行
 }
-
 
 
 static int cmd_help(char *args);
