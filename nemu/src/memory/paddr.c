@@ -49,6 +49,7 @@ paddr_t host_to_guest(uint8_t *haddr) { return haddr - pmem + CONFIG_MBASE; }
  * @return: 读取的数据。
  */
 static word_t pmem_read(paddr_t addr, int len) {
+  printf("Reading memory at address: 0x%08x, length: %d\n", addr, len); 
   word_t ret = host_read(guest_to_host(addr), len);  // 通过转换为主机地址来读取物理内存
   return ret;
 }
@@ -68,6 +69,8 @@ static void pmem_write(paddr_t addr, int len, word_t data) {
  * @param addr: 发生越界访问的物理地址。
  */
 static void out_of_bound(paddr_t addr) {
+  printf("Trying to access address 0x%08x, physical memory range: [0x%08x, 0x%08x]\n", addr, PMEM_LEFT, PMEM_RIGHT);
+  
   panic("address = " FMT_PADDR " is out of bound of pmem [" FMT_PADDR ", " FMT_PADDR "] at pc = " FMT_WORD,
       addr, PMEM_LEFT, PMEM_RIGHT, cpu.pc);  // 打印越界访问的地址及物理内存边界
 }

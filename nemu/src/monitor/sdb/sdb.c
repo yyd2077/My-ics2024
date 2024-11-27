@@ -18,11 +18,15 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
+#include <memory/paddr.h>
+#include <memory/vaddr.h>
+
 
 static int is_batch_mode = false;
 
 void init_regex();
 void init_wp_pool();
+void wp_display();
 
 /* 使用 `readline` 库从标准输入读取命令，更加灵活 */
 static char* rl_gets() {
@@ -42,6 +46,7 @@ static char* rl_gets() {
   return line_read;
 }
 
+
 /* 命令 'c'：继续执行程序 */
 static int cmd_c(char *args) {
   cpu_exec(-1);  // 执行 CPU，直到结束
@@ -54,7 +59,90 @@ static int cmd_q(char *args) {
   return -1;
 }
 
+static int cmd_si(char *args) {
+  int n = 1;  // 默认执行一条指令
 
+  // 检查是否有参数
+  if (args != NULL && strlen(args) > 0) {
+    char *endptr;
+    long val = strtol(args, &endptr, 10);
+
+    // 检查参数是否有效
+    if (*endptr != '\0' || val <= 0) {
+      printf("Invalid argument for 'si'. Please provide a positive integer.\n");
+    } else {
+      n = (int)val;
+
+      // 设置合理的执行步数上限
+      #define MAX_EXEC_STEPS 10000
+      if (n > MAX_EXEC_STEPS) {
+        printf("Too many steps requested. Limiting to %d steps.\n", MAX_EXEC_STEPS);
+        n = MAX_EXEC_STEPS;
+      }
+    }
+  }
+
+  // 执行 n 条指令
+  cpu_exec(n);
+  return 0;
+}
+
+
+
+/* 命令 'info'：打印程序状态 */
+static int cmd_info(char *args){
+
+  if (args != NULL && strcmp(args, "r") == 0) {
+    isa_reg_display();
+  }
+
+  else if (args != NULL && strcmp(args, "w") == 0) {
+    wp_display();
+  }
+  return 0;
+}
+
+static int cmd_x(char *args) {
+  if (args == NULL) {
+    printf("Usage: x N EXPR\n");
+    return 0;
+  }
+
+  // 提取 N 和 EXPR 参数
+  char *n_str = strtok(args, " ");
+  char *expr_str = strtok(NULL, "");
+
+  if (n_str == NULL || expr_str == NULL) {
+    printf("Usage: x N EXPR\n");
+    return 0;
+  }
+
+  // 将 N 转换为整数
+  char *endptr;
+  long n = strtol(n_str, &endptr, 10);
+  if (*endptr != '\0' || n <= 0) {
+    printf("Invalid value for N. Please provide a positive integer.\n");
+    return 0;
+  }
+
+  // 计算内存地址
+  // printf("Evaluating expression: %s\n", expr_str);
+  bool success = false;  // 初始化 success
+  vaddr_t addr = expr(expr_str, &success);
+  // printf("Computed address: 0x%08x\n", addr);
+
+  if (addr == -1) {
+    printf("Invalid expression: %s\n", expr_str);
+    return 0;
+  }
+
+  // 读取内存并打印
+  for (int i = 0; i < n; i++) {
+    uint32_t data = vaddr_read(addr + i * 4, 4);
+    printf("0x%08x: 0x%08x\n", addr + i * 4, data);
+  }
+  return 0;
+}
 
 /* 命令 'help'：显示所有支持的命令信息 */
 static int cmd_help(char *args);
@@ -65,11 +153,14 @@ static struct {
   const char *description;
   int (*handler) (char *);
 } cmd_table [] = {
-  { "help", "Display information about all supported commands", cmd_help },
-  { "c", "Continue the execution of the program", cmd_c },
-  { "q", "Exit NEMU", cmd_q },
-  /* TODO: 添加更多命令 */
+  { "help", "显示所有支持的命令的信息", cmd_help },
+  { "c", "继续执行程序", cmd_c },
+  { "q", "退出 NEMU", cmd_q },
+  { "si", "让程序单步执行N条指令后暂停执行,当N没有给出时, 缺省为1", cmd_si },
+  { "info", "打印程序状态, \"info r\": 打印寄存器状态, \"info w\": 打印监视点信息", cmd_info },
+  { "x", "扫描内存, 格式: x N EXPR, 从表达式 EXPR 的结果开始读取 N 个 4 字节数据", cmd_x }
 };
+
 
 #define NR_CMD ARRLEN(cmd_table)  // 命令数量
 

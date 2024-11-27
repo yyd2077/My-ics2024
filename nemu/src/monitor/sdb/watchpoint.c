@@ -12,7 +12,6 @@
 *
 * See the Mulan PSL v2 for more details.
 ***************************************************************************************/
-
 #include "sdb.h"
 
 #define NR_WP 32  // 定义最大监视点数量为 32
@@ -53,6 +52,23 @@ void init_wp_pool() {
   head = NULL;  // 激活的监视点链表初始化为空
   free_ = wp_pool;  // 空闲链表指向整个监视点池
 }
+
+void wp_display() {
+  if (head == NULL) {
+  printf("No active watchpoints.\n");
+  return;
+  }
+
+WP *current = head;
+printf("Num  Watchpoint\n");
+while (current != NULL) {
+  printf("%-4d (details if needed)\n", current->NO);
+  // 如果需要，可以在这里打印更多的监视点信息（例如表达式、当前值等）
+  current = current->next;
+  }
+}
+
+
 
 /* TODO: 实现监视点的功能
  *
