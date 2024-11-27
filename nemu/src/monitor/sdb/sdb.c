@@ -144,6 +144,22 @@ static int cmd_x(char *args) {
   return 0;
 }
 
+//表达式求值
+static int cmd_p(char *args) {
+  bool success = true;  // 用于判断表达式是否计算成功
+  word_t result;
+
+  // 计算表达式
+  result = expr(args, &success);  // 使用 expr 函数进行求值
+
+  if (success) {
+    printf("Result: 0x%x\n", result);  // 输出计算结果，使用 %x 来匹配 word_t
+  } else {
+    printf("Invalid expression: %s\n", args);  // 输出错误信息
+  }
+  return 0;
+}
+
 /* 命令 'help'：显示所有支持的命令信息 */
 static int cmd_help(char *args);
 
@@ -158,7 +174,8 @@ static struct {
   { "q", "退出 NEMU", cmd_q },
   { "si", "让程序单步执行N条指令后暂停执行,当N没有给出时, 缺省为1", cmd_si },
   { "info", "打印程序状态, \"info r\": 打印寄存器状态, \"info w\": 打印监视点信息", cmd_info },
-  { "x", "扫描内存, 格式: x N EXPR, 从表达式 EXPR 的结果开始读取 N 个 4 字节数据", cmd_x }
+  { "x", "扫描内存, 格式: x N EXPR, 从表达式 EXPR 的结果开始读取 N 个 4 字节数据", cmd_x },
+  { "p", "计算表达式的值并打印结果", cmd_p }
 };
 
 

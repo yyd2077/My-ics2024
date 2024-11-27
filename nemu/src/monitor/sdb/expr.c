@@ -57,7 +57,8 @@ static struct rule {
   {"\\|\\|", TK_OR},             // 逻辑或 '||'
   {"0x[0-9a-fA-F]+", TK_HEX},    // 十六进制数字
   {"[0-9]+", TK_NUM},            // 十进制数字
-  {"\\$[a-zA-Z][a-zA-Z0-9]*", TK_REG},  // 寄存器，如 $eax
+  {"\\$\\$0", TK_REG},         // 处理 $$0
+  {"\\$[a-zA-Z][a-zA-Z0-9]*", TK_REG},  // 匹配其他寄存器名
   {"!", '!'},                    // 逻辑非 '!'
   {"&&", TK_AND},                // 逻辑与 '&&'
   {"\\|\\|", TK_OR},             // 逻辑或 '||'
@@ -133,9 +134,19 @@ static bool make_token(char *e) {
         tk->type = rules[i].token_type;
 
         // 对于数字、十六进制数和寄存器，需要保存其字符串值
-        if (tk->type == TK_NUM || tk->type == TK_HEX || tk->type == TK_REG) {
+        if (tk->type == TK_NUM || tk->type == TK_HEX) {
           memset(tk->str, 0, sizeof(tk->str));
           strncpy(tk->str, substr_start, substr_len > 31 ? 31 : substr_len);
+        } else if (tk->type == TK_REG) {
+          memset(tk->str, 0, sizeof(tk->str));
+          strncpy(tk->str, substr_start, substr_len > 31 ? 31 : substr_len);
+
+          // 特殊处理 $$0 的情况
+          if (strncmp(tk->str, "$$0", 3) == 0) {
+            // 将 $$0 直接解析为数值 0
+            tk->type = TK_NUM;  // 将它当做一个数字处理
+            strcpy(tk->str, "0");  // 设置为 "0"
+          }
         }
 
         break;
