@@ -38,6 +38,8 @@ static bool g_print_step = false;
 
 // 声明设备更新函数
 void device_update();
+// 声明检查 WP 寄存器的函数
+void check_wp();
 
 /*
  * trace_and_difftest: 进行指令的跟踪和差分测试。
@@ -144,6 +146,8 @@ void cpu_exec(uint64_t n) {
   uint64_t timer_start = get_time();  // 获取开始时间
 
   execute(n);  // 执行指令
+
+  check_wp();  // 检查 WP 监视点
 
   uint64_t timer_end = get_time();  // 获取结束时间
   g_timer += timer_end - timer_start;  // 计算执行时间

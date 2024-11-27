@@ -13,8 +13,13 @@
 * See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 #include "sdb.h"
+#include <memory/paddr.h>
+#include <memory/vaddr.h>
 
 #define NR_WP 32  // 定义最大监视点数量为 32
+// 定义监视点地址的合法范围
+#define WATCHPOINT_ADDR_MIN 0x80000000
+#define WATCHPOINT_ADDR_MAX 0x87ffffff
 
 /*
  * 监视点结构体定义。
@@ -25,11 +30,10 @@
  * 当值发生变化时，模拟器会暂停执行，方便调试。
  */
 typedef struct watchpoint {
-  int NO;  // 监视点编号
-  struct watchpoint *next;  // 指向下一个监视点
-
-  /* TODO: 如果需要，可以添加更多成员 */
-
+  int NO;            // 监视点编号
+  struct watchpoint *next; // 指向下一个监视点
+  vaddr_t addr;      // 监视的内存地址
+  uint32_t Watchpoint_value; // 存储监视点的旧值
 } WP;
 
 // 监视点池，包含最多 NR_WP 个监视点
@@ -44,7 +48,7 @@ static WP *head = NULL, *free_ = NULL;
  */
 void init_wp_pool() {
   int i;
-  for (i = 0; i < NR_WP; i ++) {
+  for (i = 0; i < NR_WP; i++) {
     wp_pool[i].NO = i;  // 设置监视点编号
     wp_pool[i].next = (i == NR_WP - 1 ? NULL : &wp_pool[i + 1]);  // 将监视点链接成一个链表
   }
@@ -53,18 +57,119 @@ void init_wp_pool() {
   free_ = wp_pool;  // 空闲链表指向整个监视点池
 }
 
-void wp_display() {
-  if (head == NULL) {
-  printf("No active watchpoints.\n");
-  return;
+/*
+ * wp_add: 添加一个新的监视点。
+ *
+ * @addr: 需要监视的内存地址。
+ */
+void wp_add(vaddr_t addr) {
+  // 检查地址是否在合法范围内
+  if (addr < WATCHPOINT_ADDR_MIN || addr > WATCHPOINT_ADDR_MAX) {
+    printf("Error: Watchpoint address 0x%x is out of range. Valid range is [0x%x, 0x%x].\n",
+           addr, WATCHPOINT_ADDR_MIN, WATCHPOINT_ADDR_MAX);
+    return;
   }
 
-WP *current = head;
-printf("Num  Watchpoint\n");
-while (current != NULL) {
-  printf("%-4d (details if needed)\n", current->NO);
-  // 如果需要，可以在这里打印更多的监视点信息（例如表达式、当前值等）
-  current = current->next;
+  // 检查当前激活的监视点数量
+  int count = 0;
+  WP *current = head;
+  while (current != NULL) {
+    count++;
+    current = current->next;
+  }
+
+  // 如果监视点数量已经达到最大值（32），则不能添加新监视点
+  if (count >= NR_WP) {
+    printf("Cannot add new watchpoint. Maximum number of watchpoints reached (%d).\n", NR_WP);
+    return;
+  }
+
+  // 如果没有可用的监视点，则返回
+  if (free_ == NULL) {
+    printf("No available watchpoints!\n");
+    return;
+  }
+
+  // 从空闲链表中获取一个监视点并更新空闲链表
+  WP *wp = free_;
+  free_ = free_->next;
+
+  wp->next = head;  // 将新监视点添加到激活链表头部
+  head = wp;
+
+  wp->addr = addr;  // 设置监视点地址
+  wp->Watchpoint_value = vaddr_read(addr,4);  
+  printf("Watchpoint %d added at address %#x\n", wp->NO, addr);
+  printf("Watchpoint value: 0x%x\n", wp->Watchpoint_value);
+}
+
+void wp_display() {
+  if (head == NULL) {
+    printf("No active watchpoints.\n");
+    return;
+  }
+
+  WP *current = head;
+  printf("Num  Watchpoint\n");
+  while (current != NULL) {
+    // 使用 %#x 打印地址
+    printf("%-4d at address %#x\n", current->NO, current->addr);
+    current = current->next;
+  }
+}
+
+/*
+ * wp_delete: 删除指定序号的监视点。
+ *
+ * @N: 要删除的监视点序号。
+ */
+void wp_delete(int N) {
+  WP *prev = NULL, *current = head;
+
+  // 遍历激活链表，查找指定序号的监视点
+  while (current != NULL) {
+    if (current->NO == N) {
+      // 如果是头结点
+      if (prev == NULL) {
+        head = current->next;
+      } else {
+        prev->next = current->next;
+      }
+
+      // 将该监视点放回空闲链表
+      current->next = free_;
+      free_ = current;
+
+      // 打印删除的监视点信息
+      printf("Watchpoint %d deleted.\n", N);
+      return;
+    }
+
+    prev = current;
+    current = current->next;
+  }
+
+  // 如果没有找到监视点，打印错误信息
+  printf("Watchpoint %d not found.\n", N);
+}
+
+//监视点检查函数
+void check_wp() {
+  WP *current = head;
+  while (current != NULL) {
+    uint32_t new_value = vaddr_read(current->addr, 4);
+
+    if (new_value != current->Watchpoint_value) {
+      // 打印监视点信息，使用正确的格式符
+      printf("Watchpoint %d: value at address 0x%08x changed from 0x%08x to 0x%08x\n",
+             current->NO, current->addr, current->Watchpoint_value, new_value);
+
+      //  nemu_state.state
+      nemu_state.state = NEMU_STOP;
+      return;
+    }
+
+    current = current->next;
   }
 }
 

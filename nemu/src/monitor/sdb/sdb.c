@@ -27,6 +27,10 @@ static int is_batch_mode = false;
 void init_regex();
 void init_wp_pool();
 void wp_display();
+void wp_add(vaddr_t addr);
+void wp_delete(int N);
+
+
 
 /* 使用 `readline` 库从标准输入读取命令，更加灵活 */
 static char* rl_gets() {
@@ -48,10 +52,19 @@ static char* rl_gets() {
 
 
 /* 命令 'c'：继续执行程序 */
+/* 命令 'c'：继续执行程序 */
 static int cmd_c(char *args) {
-  cpu_exec(-1);  // 执行 CPU，直到结束
+  if (nemu_state.state == NEMU_STOP) {
+    nemu_state.state = NEMU_RUNNING;  // 恢复执行
+    printf("Execution continues...\n");
+    cpu_exec(-1);  // 继续执行直到程序结束或者再次被暂停
+  } else {
+    printf("Program is already running.\n");
+    cpu_exec(-1);  // 继续执行直到程序结束
+  }
   return 0;
 }
+
 
 /* 命令 'q'：退出 NEMU */
 static int cmd_q(char *args) {
@@ -160,6 +173,51 @@ static int cmd_p(char *args) {
   return 0;
 }
 
+/* cmd_w：设置新的监视点 */
+static int cmd_w(char *args) {
+  if (args == NULL) {
+    printf("Usage: w EXPR\n");
+    return 0;
+  }
+
+  // 添加监视点
+  bool success = false; 
+  vaddr_t addr = expr(args, &success);
+  if (success) {
+    wp_add(addr);  // 添加监视点
+  } else {
+    printf("Invalid expression: %s\n", args);
+  }
+  return 0;
+}
+
+static int cmd_d(char *args){
+  if (args == NULL) {
+    printf("Usage: d N\n");
+    return 0;
+  }
+
+  // 提取 N 参数
+  char *n_str = strtok(args, " ");
+  if (n_str == NULL) {
+    printf("Usage: d N\n");
+    return 0;
+  }
+
+  // 将 N 转换为整数
+  char *endptr;
+  long n = strtol(n_str, &endptr, 10);
+  if (*endptr != '\0' || n < 0) {
+    printf("Invalid value for N. Please provide a positive integer.\n");
+    return 0;
+  }
+
+  // 删除监视点
+  wp_delete(n);
+
+  return 0;
+}
+
 /* 命令 'help'：显示所有支持的命令信息 */
 static int cmd_help(char *args);
 
@@ -175,7 +233,9 @@ static struct {
   { "si", "让程序单步执行N条指令后暂停执行,当N没有给出时, 缺省为1", cmd_si },
   { "info", "打印程序状态, \"info r\": 打印寄存器状态, \"info w\": 打印监视点信息", cmd_info },
   { "x", "扫描内存, 格式: x N EXPR, 从表达式 EXPR 的结果开始读取 N 个 4 字节数据", cmd_x },
-  { "p", "计算表达式的值并打印结果", cmd_p }
+  { "p", "计算表达式的值并打印结果", cmd_p },
+  { "w", "设置新的监视点", cmd_w },
+  { "d", "删除监视点", cmd_d },
 };
 
 
@@ -245,6 +305,9 @@ void sdb_mainloop() {
 
     if (i == NR_CMD) { printf("Unknown command '%s'\n", cmd); }  // 如果命令不存在，打印错误信息
   }
+
+
+
 }
 
 /* 初始化简单调试器 */
