@@ -18,13 +18,17 @@
 
 #include <common.h>
 
+// 检查寄存器索引是否合法
 static inline int check_reg_idx(int idx) {
+  // 如果定义了CONFIG_RT_CHECK，则检查索引是否在合法范围内
   IFDEF(CONFIG_RT_CHECK, assert(idx >= 0 && idx < MUXDEF(CONFIG_RVE, 16, 32)));
   return idx;
 }
 
+// 获取通用寄存器
 #define gpr(idx) (cpu.gpr[check_reg_idx(idx)])
 
+// 获取寄存器名称
 static inline const char* reg_name(int idx) {
   extern const char* regs[];
   return regs[check_reg_idx(idx)];
